@@ -271,6 +271,7 @@ export function startMap(container: HTMLElement): void {
     core: () => core.peek(),
     sections: () => sections,
     ctx: () => spider.peek()?.ctx ?? null,
+    served: () => spider.peek()?.served ?? null,
   });
   const pins = new Pins(map, { enter: (k, el) => hover.pinEnter(k, el), leave: () => hover.pinLeave() });
   const endLabels = new EndLabels(map);

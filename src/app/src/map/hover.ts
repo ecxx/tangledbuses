@@ -8,6 +8,7 @@ import { mercX, mercY } from "../model/geo";
 import { distanceToLine, hoverItems, type Highlight, type HoverItem } from "../model/hover";
 import type { RouteContext } from "../model/route";
 import { stopCode, stopName } from "../model/text";
+import { dotReach } from "./layers";
 import { viewHash } from "../model/url";
 import { time } from "../perf";
 import { go } from "../state/router";
@@ -27,6 +28,7 @@ export interface HoverSource {
   core: () => Core | null;
   sections: () => ReadonlyMap<PatternKey, AfterSection> | null; // the sections after the stop of the view
   ctx: () => RouteContext | null; // the stop or the station that a route opens from
+  served: () => ReadonlySet<StopKey> | null; // the stops with a red ring. null: no spider graph.
 }
 
 export class MapHover {
@@ -82,12 +84,40 @@ export class MapHover {
   // The dot at a point: a stop dot of the route view (above), else a stop dot. k: the stop of the
   // tooltip. A click opens the stop (app_design 5.5, 6.5).
   private dotAt(p: { x: number; y: number }): { k: StopKey; f: MapGeoJSONFeature } | undefined {
-    for (const layer of ["route-stops", "stop-dots"] as const) {
-      if (!this.map.getLayer(layer)) continue;
-      const f = this.map.queryRenderedFeatures([p.x, p.y], { layers: [layer] })[0];
+    if (this.map.getLayer("route-stops")) {
+      const f = this.map.queryRenderedFeatures([p.x, p.y], { layers: ["route-stops"] })[0];
       if (f) return { k: f.properties.k as StopKey, f };
     }
-    return undefined;
+    return this.stopDotAt(p);
+  }
+
+  // The stop dot at a point: the nearest dot whose circle (with its stroke) contains the point. A point
+  // query is not sufficient: MapLibre pads the query by the largest circle-radius of the tile only if the
+  // radius changes with the data. With no spider graph, the radius changes only with the zoom, the
+  // padding is 0, and a point on a dot can find no feature.
+  private stopDotAt(p: { x: number; y: number }): { k: StopKey; f: MapGeoJSONFeature } | undefined {
+    if (!this.map.getLayer("stop-dots")) return undefined;
+    const zoom = this.map.getZoom();
+    const served = this.src.served();
+    const reach = (k: StopKey) => dotReach(zoom, served ? (served.has(k) ? "red" : "dim") : "plain");
+    const r = Math.max(dotReach(zoom, "plain"), dotReach(zoom, "red"));
+    if (!r) return undefined;
+    const box: [PointLike, PointLike] = [
+      [p.x - r, p.y - r],
+      [p.x + r, p.y + r],
+    ];
+    let best: { k: StopKey; f: MapGeoJSONFeature } | undefined;
+    let bestD = Infinity;
+    for (const f of this.map.queryRenderedFeatures(box, { layers: ["stop-dots"] })) {
+      const k = f.properties.k as StopKey;
+      const at = this.map.project((f.geometry as GeoJSON.Point).coordinates as [number, number]);
+      const d = Math.hypot(at.x - p.x, at.y - p.y);
+      if (d <= reach(k) && d < bestD) {
+        best = { k, f };
+        bestD = d;
+      }
+    }
+    return best;
   }
 
   private href(i: HoverItem): string {

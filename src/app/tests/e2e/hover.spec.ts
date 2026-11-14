@@ -247,6 +247,45 @@ test.describe("stop dots and stop pins (app_design 5.5)", () => {
     await checkStopDot(page, dot);
   });
 
+  // MapLibre pads a point query by the largest circle-radius of the tile. A tile that loaded in a spider
+  // graph (a radius that changes with the data) keeps that padding state; in the home view after it (a
+  // radius that changes only with the zoom) a point query on a dot of that tile found no feature. The
+  // hit test of the client does not use the padding (prod_design 5.5).
+  for (const zoom of [14.2, 14.7]) {
+    test(`the home view at zoom ${zoom} after a spider graph: each stop dot has a tooltip, and a click opens the stop`, async ({ page }) => {
+      await page.setViewportSize(WIDE);
+      const at = async () => {
+        await page.evaluate((zoom) => window.__map!.jumpTo({ center: [-0.1248, 51.5081], zoom }), zoom);
+        await page.waitForFunction(() => !window.__map!.isMoving() && window.__map!.loaded(), null, { timeout: 15_000 });
+      };
+      await open(page, `#/station/${ALDWYCH}`);
+      await mapReady(page, true);
+      await fitDone(page);
+      await at(); // the tiles of this zoom load in the spider graph
+      await open(page, "#/");
+      await at();
+      const dots = await page.evaluate(() => {
+        const m = window.__map!;
+        const panel = document.querySelector(".panel")!.getBoundingClientRect();
+        return m
+          .queryRenderedFeatures({ layers: ["stop-dots"] })
+          .map((f) => ({ k: f.properties.k as string, p: m.project((f.geometry as GeoJSON.Point).coordinates as [number, number]) }))
+          .filter((x) => x.p.x > panel.right + 30 && x.p.x < innerWidth - 60 && x.p.y > 60 && x.p.y < innerHeight - 60)
+          .slice(0, 8);
+      });
+      expect(dots.length).toBe(8);
+      for (const dot of dots) {
+        await page.mouse.move(dot.p.x, dot.p.y);
+        await expect(page.locator(".tip b")).toBeVisible();
+        await page.mouse.move(dot.p.x, dot.p.y - 40);
+        await expect(page.locator(".tip b")).toBeHidden();
+      }
+      const last = dots.at(-1)!;
+      await page.mouse.click(last.p.x, last.p.y);
+      await expect(page).toHaveURL(new RegExp(`#/stop/${last.k}$`));
+    });
+  }
+
   test("a stop pin: the tooltip with the stop name and its text form", async ({ page }) => {
     await page.setViewportSize(WIDE);
     await open(page, "#/stop/490001038D");

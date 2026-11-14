@@ -41,29 +41,56 @@ function highlighted(h: Highlight): ExpressionSpecification {
 //   zoom 13 to 14: radius 3.5, stroke 1.5 (2.5 for a red ring). A dimmed dot is not shown.
 //   zoom 14 to 16: radius 3.5, stroke 1.5 (2.5).
 //   from zoom 16:  radius 6, stroke 2 (2.5).
+// The bands of the table: the zoom where the band starts, the radius and the stroke.
+const DOT_BANDS = [
+  [STOP_ZOOM, 3.5, 1.5],
+  [DIM_ZOOM, 3.5, 1.5],
+  [16, 6, 2],
+] as const;
+const RED_RING = 2.5;
+
+// red: a stop with a red ring. dim: a dimmed stop. plain: a stop with no spider graph.
+export type DotKind = "plain" | "red" | "dim";
+
+// The circle-radius and the circle-stroke-width of a stop dot in a band of DOT_BANDS.
+function dotSize(band: (typeof DOT_BANDS)[number], kind: DotKind): { radius: number; width: number } {
+  const [z, r, w] = band;
+  if (kind === "red") return { radius: r - RED_RING / 2, width: RED_RING };
+  if (kind === "dim" && z < DIM_ZOOM) return { radius: 0, width: 0 };
+  return { radius: r - w / 2, width: w };
+}
+
+// The px from the centre of a stop dot to the outer edge of its stroke, at a zoom. 0: the dot is not
+// shown. The hit test of the stop dots uses this value (prod_design 5.5).
+export function dotReach(zoom: number, kind: DotKind): number {
+  if (zoom < STOP_ZOOM) return 0;
+  const band = [...DOT_BANDS].reverse().find(([z]) => zoom >= z)!;
+  const { radius, width } = dotSize(band, kind);
+  return radius + width;
+}
+
 // In a spider graph, a stop that the shown patterns serve after the selected stop has a red ring, and
 // the other stops are dimmed. With no
 // spider graph (the home view, a route view), all the dots have full opacity. The property s of a stop
 // dot is the key of its station.
 function stopDots(c: Colors, s: LayerState): LayerSpecification {
   const on: ExpressionSpecification | null = s.served ? ["in", ["get", "k"], ["literal", s.served]] : null;
-  const pick = (red: number, other: number) => (on ? (["case", on, red, other] as ExpressionSpecification) : other);
   const fade = (dim: number) => (on ? (["case", on, 1, dim] as ExpressionSpecification) : 1);
-  const band = (r: number, w: number, hideDim: boolean) => ({
-    radius: pick(r - 1.25, hideDim && on ? 0 : r - w / 2),
-    width: pick(2.5, hideDim && on ? 0 : w),
-  });
-  const z13 = band(3.5, 1.5, true);
-  const z14 = band(3.5, 1.5, false);
-  const z16 = band(6, 2, false);
+  // A zoom expression must be the outer expression: thus step, then case.
+  const steps = (p: "radius" | "width"): ExpressionSpecification => {
+    const v = (band: (typeof DOT_BANDS)[number]) =>
+      on ? (["case", on, dotSize(band, "red")[p], dotSize(band, "dim")[p]] as ExpressionSpecification) : dotSize(band, "plain")[p];
+    const [first, ...rest] = DOT_BANDS;
+    return ["step", ["zoom"], v(first), ...rest.flatMap((b) => [b[0], v(b)])] as ExpressionSpecification;
+  };
   const layer: LayerSpecification = {
     id: "stop-dots",
     type: "circle",
     source: "stops",
     minzoom: STOP_ZOOM,
     paint: {
-      "circle-radius": ["step", ["zoom"], z13.radius, DIM_ZOOM, z14.radius, 16, z16.radius] as ExpressionSpecification,
-      "circle-stroke-width": ["step", ["zoom"], z13.width, DIM_ZOOM, z14.width, 16, z16.width] as ExpressionSpecification,
+      "circle-radius": steps("radius"),
+      "circle-stroke-width": steps("width"),
       "circle-color": c.stopFill,
       "circle-opacity": fade(0.5),
       "circle-stroke-color": on ? ["case", on, c.red, c.stopRing] : c.stopRing,
