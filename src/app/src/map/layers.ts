@@ -5,7 +5,7 @@ import type { ExpressionSpecification, FilterSpecification, LayerSpecification, 
 import type { Highlight } from "../model/hover";
 import { lineColor, type Colors } from "./colors";
 
-export const SOURCES = ["home", "view", "stations", "route-stops", "hover"] as const;
+export const SOURCES = ["home", "view", "stops", "route-stops", "hover"] as const;
 export type SourceId = (typeof SOURCES)[number];
 
 const DASH_SPIDER = [1.5, 1.75]; // 6 px, 7 px at 4 px (app_design 3.6, in units of the line width)
@@ -14,13 +14,13 @@ const DASH_ROUTE_OTHER = [2, 2.33]; // 6 px, 7 px at 3 px
 const DASH_ROUTE_SELECTED = [1.6, 1.6]; // 8 px, 8 px at 5 px
 const DIM = 0.12; // the opacity of the lines that are not highlighted (app_design 6.4)
 const SOLID = [1, 0];
-const STOP_ZOOM = 13; // the station dots start at this zoom (app_design 5.4)
-const DIM_ZOOM = 14; // the station dots that a spider graph does not serve start at this zoom
+const STOP_ZOOM = 13; // the stop dots start at this zoom (app_design 5.4)
+const DIM_ZOOM = 14; // the stop dots that a spider graph does not serve start at this zoom
 
 // The state of the view that the paint and the filters use.
 export interface LayerState {
-  served: string[] | null; // a spider graph: the station keys of the red rings. null: no spider graph.
-  station: string | null; // the selected station: its stops show as pins, not as a dot (app_design 5.5)
+  served: string[] | null; // a spider graph: the stop keys of the red rings. null: no spider graph.
+  station: string | null; // the selected station: its stops show as pins, not as dots (app_design 5.5)
   highlight: Highlight | null; // the highlighted routes (app_design 6.4)
 }
 
@@ -35,15 +35,17 @@ function highlighted(h: Highlight): ExpressionSpecification {
   return h.dir ? ["all", lines, ["==", ["get", "dir"], h.dir]] : lines;
 }
 
-// app_design 5.4 and 5.5. The demo (Leaflet) draws the stroke on the radius; MapLibre draws it outside
-// the radius. Thus circle-radius is the radius of the table less half the stroke, and the dots have the
-// same size as in the demo.
+// app_design 5.4 and 5.5: one dot for each stop, in all views. The demo (Leaflet) draws the stroke on the
+// radius; MapLibre draws it outside the radius. Thus circle-radius is the radius of the table less half
+// the stroke, and the dots have the same size as in the demo.
 //   zoom 13 to 14: radius 3.5, stroke 1.5 (2.5 for a red ring). A dimmed dot is not shown.
 //   zoom 14 to 16: radius 3.5, stroke 1.5 (2.5).
 //   from zoom 16:  radius 6, stroke 2 (2.5).
-// Only the dimmed dots of a spider graph have less opacity. With no spider graph (the home view), all
-// the dots have full opacity.
-function stationDots(c: Colors, s: LayerState): LayerSpecification {
+// In a spider graph, a stop that the shown patterns serve after the selected stop has a red ring, and
+// the other stops are dimmed. With no
+// spider graph (the home view, a route view), all the dots have full opacity. The property s of a stop
+// dot is the key of its station.
+function stopDots(c: Colors, s: LayerState): LayerSpecification {
   const on: ExpressionSpecification | null = s.served ? ["in", ["get", "k"], ["literal", s.served]] : null;
   const pick = (red: number, other: number) => (on ? (["case", on, red, other] as ExpressionSpecification) : other);
   const fade = (dim: number) => (on ? (["case", on, 1, dim] as ExpressionSpecification) : 1);
@@ -55,9 +57,9 @@ function stationDots(c: Colors, s: LayerState): LayerSpecification {
   const z14 = band(3.5, 1.5, false);
   const z16 = band(6, 2, false);
   const layer: LayerSpecification = {
-    id: "station-dots",
+    id: "stop-dots",
     type: "circle",
-    source: "stations",
+    source: "stops",
     minzoom: STOP_ZOOM,
     paint: {
       "circle-radius": ["step", ["zoom"], z13.radius, DIM_ZOOM, z14.radius, 16, z16.radius] as ExpressionSpecification,
@@ -68,14 +70,15 @@ function stationDots(c: Colors, s: LayerState): LayerSpecification {
       "circle-stroke-opacity": fade(0.3),
     },
   };
-  if (s.station) layer.filter = ["!=", ["get", "k"], s.station];
+  // The stops of the selected station show as pins, not as dots.
+  if (s.station) layer.filter = ["!=", ["get", "s"], s.station];
   return layer;
 }
 
 // app_design 5.4 and 6.5: the stop dots of the route view, at all zooms. Radius 3.5 px below zoom 12,
 // 4.5 px to zoom 14, then 5.5 px; a 2 px ring below zoom 12, else 2.5 px. The first and the last stop
 // (end) are 2 px larger, with a 3 px ring and the line colour fill. circle-radius is the radius less half
-// the ring (see stationDots). A zoom expression must be the outer expression: thus step, then case.
+// the ring (see stopDots). A zoom expression must be the outer expression: thus step, then case.
 function routeStops(c: Colors): LayerSpecification {
   const end: ExpressionSpecification = ["get", "end"];
   const band = (r: number, w: number) => ["case", end, r + 2 - 3 / 2, r - w / 2] as ExpressionSpecification;
@@ -143,7 +146,7 @@ export function layerSpecs(c: Colors, s: LayerState): LayerSpecification[] {
       layout: ROUND,
       paint: { "line-color": lineColor(c), "line-width": 5, "line-opacity": 0.95, "line-dasharray": dash(DASH_ROUTE_SELECTED) },
     },
-    stationDots(c, s),
+    stopDots(c, s),
     routeStops(c),
     {
       // A copy of the highlighted sections after the stop: 2 px wider, opaque. Not interactive.
@@ -155,7 +158,7 @@ export function layerSpecs(c: Colors, s: LayerState): LayerSpecification[] {
       paint: { "line-color": lineColor(c), "line-width": 6, "line-opacity": 1, "line-dasharray": dash(DASH_SPIDER_HIGH) },
     },
     {
-      // app_design 5.6: radius 9 px and a 2.5 px --ink line, to the middle of the line (see stationDots).
+      // app_design 5.6: radius 9 px and a 2.5 px --ink line, to the middle of the line (see stopDots).
       id: "hover-ring",
       type: "circle",
       source: "hover",

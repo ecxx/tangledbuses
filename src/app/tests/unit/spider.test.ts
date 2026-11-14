@@ -3,7 +3,7 @@ import type { Core } from "../../src/data/load";
 import type { Direction, LineInfo } from "../../src/data/types";
 import { endBadgeSize, endBadgesShown, endGroups, type End } from "../../src/model/endLabels";
 import { distanceM, type LngLat } from "../../src/model/geo";
-import { applyFilter, filterCounts, servedStations, spiderPatterns, spiderRows } from "../../src/model/spider";
+import { applyFilter, filterCounts, servedStops, spiderPatterns, spiderRows } from "../../src/model/spider";
 import { HAS_EXPORT, getCore } from "./fixtures";
 
 const L = (name: string): LineInfo => ({ id: name.toLowerCase(), name, cls: "day", dirs: { inbound: [], outbound: [] } });
@@ -129,14 +129,17 @@ describe.skipIf(!HAS_EXPORT)("spider rows of data_131026 (app_design 6.4)", () =
     expect(found).not.toBe("");
   });
 
-  test("the served stations are after the selected stops", () => {
+  test("the served stops are the stops of the patterns after the selected stops", () => {
     const ks = d.stationStops.get("ICS1001038")!;
     const pats = spiderPatterns(d, ks);
-    const served = servedStations(d, pats, new Set(["189"]));
-    // 189-O1 calls at Marble Arch after Brondesbury; 189-I calls at Brent Cross after it.
-    const names = [...served].map((s) => d.stations[s]![0]);
+    const served = servedStops(d, pats, new Set(["189"]));
+    // 189-I calls at Brent Cross after Brondesbury.
+    const names = [...served].map((k) => d.stations[d.stops[k]![4]]![0]);
     expect(names).toContain("Brent Cross Shopping Centre");
-    expect(served.has("ICS1001038")).toBe(false);
-    expect(servedStations(d, pats, new Set()).size).toBe(0);
+    expect(ks.some((k) => served.has(k))).toBe(false);
+    // Only the stops that the patterns call at: each served stop is in a 189 pattern.
+    const called = new Set(Object.values(d.patterns).filter((p) => p[0] === "189").flatMap((p) => p[4]));
+    expect([...served].every((k) => called.has(k))).toBe(true);
+    expect(servedStops(d, pats, new Set()).size).toBe(0);
   });
 });

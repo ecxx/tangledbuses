@@ -45,7 +45,7 @@ test.describe("station view (app_design 6.2, 6.4)", () => {
     await expect(rows(page).first()).toHaveAttribute("href", `#/station/${ALDWYCH}/line/1/outbound`);
   });
 
-  test("Aldwych / Drury Lane: the map lines, the pins and the station dots", async ({ page }) => {
+  test("Aldwych / Drury Lane: the map lines, the pins and the stop dots", async ({ page }) => {
     await page.setViewportSize(WIDE);
     await open(page, `#/station/${ALDWYCH}`);
     await mapReady(page, true);
@@ -60,11 +60,14 @@ test.describe("station view (app_design 6.2, 6.4)", () => {
     await expect(page.locator(".pin.sel")).toHaveCount(0);
     const dots = await page.evaluate(() => {
       const m = window.__map!;
-      return { filter: m.getFilter("station-dots"), ring: JSON.stringify(m.getPaintProperty("station-dots", "circle-stroke-color")) };
+      return { filter: m.getFilter("stop-dots"), ring: JSON.stringify(m.getPaintProperty("stop-dots", "circle-stroke-color")) };
     });
-    // The selected station has no dot. The served stations have a red ring.
-    expect(dots.filter).toEqual(["!=", ["get", "k"], ALDWYCH]);
-    expect(dots.ring).toContain(`"ICS1000173"`); // Oxford Circus Station is served after Aldwych
+    // The stops of the selected station have no dot. Only the stops that the patterns serve after the
+    // selected stops have a red ring: at Oxford Circus Station, Stop RC, not Stops RG and OH.
+    expect(dots.filter).toEqual(["!=", ["get", "s"], ALDWYCH]);
+    expect(dots.ring).toContain(`"490000173RC"`);
+    expect(dots.ring).not.toContain(`"490000173RG"`);
+    expect(dots.ring).not.toContain(`"490000173Z"`);
     // The home lines are not shown.
     expect(await page.evaluate(() => window.__map!.getLayoutProperty("home-lines", "visibility"))).toBe("none");
   });
@@ -85,29 +88,29 @@ test.describe("station view (app_design 6.2, 6.4)", () => {
       { polling: 100 },
     );
     // The served stations are of the shown lines only: fewer than with All.
-    const ring = await page.evaluate(() => JSON.stringify(window.__map!.getPaintProperty("station-dots", "circle-stroke-color")));
+    const ring = await page.evaluate(() => JSON.stringify(window.__map!.getPaintProperty("stop-dots", "circle-stroke-color")));
     await page.getByRole("button", { name: "All 33" }).click();
-    await page.waitForFunction((r) => JSON.stringify(window.__map!.getPaintProperty("station-dots", "circle-stroke-color")) !== r, ring);
-    const all = await page.evaluate(() => JSON.stringify(window.__map!.getPaintProperty("station-dots", "circle-stroke-color")));
+    await page.waitForFunction((r) => JSON.stringify(window.__map!.getPaintProperty("stop-dots", "circle-stroke-color")) !== r, ring);
+    const all = await page.evaluate(() => JSON.stringify(window.__map!.getPaintProperty("stop-dots", "circle-stroke-color")));
     expect(all.length).toBeGreaterThan(ring.length);
   });
 
-  test("a change of the colour scheme keeps the spider graph and its station dots", async ({ page }) => {
+  test("a change of the colour scheme keeps the spider graph and its stop dots", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light" });
     await open(page, `#/station/${ALDWYCH}`);
     await mapReady(page, true);
     await fitDone(page);
     const before = (await viewFeatures(page)).length;
     await page.emulateMedia({ colorScheme: "dark" });
-    await page.waitForFunction(() => /^Dark Matter/.test(window.__map!.getStyle()?.name ?? "") && !!window.__map!.getLayer("station-dots"));
+    await page.waitForFunction(() => /^Dark Matter/.test(window.__map!.getStyle()?.name ?? "") && !!window.__map!.getLayer("stop-dots"));
     await page.waitForFunction(() => JSON.stringify(window.__map!.getPaintProperty("spider-after", "line-color")).includes("#F0453F"));
     expect((await viewFeatures(page)).length).toBe(before);
     const dots = await page.evaluate(() => ({
-      filter: window.__map!.getFilter("station-dots"),
-      ring: JSON.stringify(window.__map!.getPaintProperty("station-dots", "circle-stroke-color")),
+      filter: window.__map!.getFilter("stop-dots"),
+      ring: JSON.stringify(window.__map!.getPaintProperty("stop-dots", "circle-stroke-color")),
     }));
-    expect(dots.filter).toEqual(["!=", ["get", "k"], ALDWYCH]);
-    expect(dots.ring).toContain('"ICS1000173"');
+    expect(dots.filter).toEqual(["!=", ["get", "s"], ALDWYCH]);
+    expect(dots.ring).toContain('"490000173RC"');
     expect(dots.ring).toContain("#F0453F");
   });
 

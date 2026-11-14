@@ -26,10 +26,10 @@ function samplePoints(page: Page, n: number) {
       .filter((f) => f.properties!.part === "after")
       .map((f) => ({ line: f.properties!.line as string, pts: f.geometry.coordinates.map((c) => m.project(c as [number, number])) }));
     const panel = document.querySelector(".panel")!.getBoundingClientRect();
-    // A station dot (from STOP_ZOOM) is above the lines too: the hover shows the station, not the routes.
+    // A stop dot (from STOP_ZOOM) is above the lines too: the hover shows the stop, not the routes.
     const onMarker = (x: number, y: number) =>
       [[0, 0], [-3, -3], [3, -3], [-3, 3], [3, 3]].some(([dx, dy]) => !!document.elementFromPoint(x + dx!, y + dy!)?.closest(".maplibregl-marker")) ||
-      m.queryRenderedFeatures([[x - 3, y - 3], [x + 3, y + 3]], { layers: ["station-dots"] }).length > 0;
+      m.queryRenderedFeatures([[x - 3, y - 3], [x + 3, y + 3]], { layers: ["stop-dots"] }).length > 0;
     const dist = (pts: { x: number; y: number }[], x: number, y: number) => {
       let best = Infinity;
       for (let i = 1; i < pts.length; i++) {
@@ -199,31 +199,52 @@ test.describe("hover in the panel (app_design 6.4, 5.6)", () => {
   });
 });
 
-test.describe("station dots and stop pins (app_design 5.5)", () => {
-  test("a station dot: the tooltip with the name and the stops, and a click opens the station", async ({ page }) => {
+// A stop dot in the free area, at zoom 16 at Savoy Street (490G00012604), a station after Aldwych on the 1.
+async function stopDotAtSavoy(page: Page) {
+  await page.evaluate(() => window.__map!.jumpTo({ center: [-0.11782, 51.51072], zoom: 16 }));
+  await page.waitForFunction(() => !window.__map!.isMoving() && window.__map!.loaded(), null, { timeout: 15_000 });
+  return page.evaluate(() => {
+    const m = window.__map!;
+    const f = m.queryRenderedFeatures({ layers: ["stop-dots"] }).map((f) => ({ k: f.properties.k as string, s: f.properties.s as string, p: m.project((f.geometry as GeoJSON.Point).coordinates as [number, number]) }));
+    const panel = document.querySelector(".panel")!.getBoundingClientRect();
+    return f.find((x) => x.p.x > panel.right + 30 && x.p.x < innerWidth - 60 && x.p.y > 60 && x.p.y < innerHeight - 60)!;
+  });
+}
+
+// The tooltip of a stop dot has the stop name, and a click opens the stop.
+async function checkStopDot(page: Page, dot: { k: string; s: string; p: { x: number; y: number } }) {
+  await page.mouse.move(dot.p.x, dot.p.y);
+  const name = await page.evaluate(async (k) => {
+    const m = await (await fetch("/data/manifest.json")).json();
+    return ((await (await fetch(`/data/${m.files.stops}`)).json())[k] as [string])[0];
+  }, dot.k);
+  await expect(page.locator(".tip b")).toHaveText(name.replace(/\s+/g, " ").replace(/\s*\/\s*/g, " / ").trim());
+  await page.mouse.click(dot.p.x, dot.p.y);
+  await expect(page).toHaveURL(new RegExp(`#/stop/${dot.k}$`));
+}
+
+test.describe("stop dots and stop pins (app_design 5.5)", () => {
+  test("a stop dot in a spider graph: the tooltip with the stop name, and a click opens the stop", async ({ page }) => {
     await page.setViewportSize(WIDE);
     await open(page, `#/station/${ALDWYCH}`);
     await mapReady(page, true);
     await fitDone(page);
-    // Zoom 16 at Savoy Street (490G00012604), a station after Aldwych on the 1.
-    await page.evaluate(() => window.__map!.jumpTo({ center: [-0.11782, 51.51072], zoom: 16 }));
-    await page.waitForFunction(() => !window.__map!.isMoving() && window.__map!.loaded(), null, { timeout: 15_000 });
-    const dot = await page.evaluate(() => {
-      const m = window.__map!;
-      const f = m.queryRenderedFeatures({ layers: ["station-dots"] }).map((f) => ({ k: f.properties.k as string, p: m.project((f.geometry as GeoJSON.Point).coordinates as [number, number]) }));
-      const panel = document.querySelector(".panel")!.getBoundingClientRect();
-      return f.find((x) => x.p.x > panel.right + 30 && x.p.x < innerWidth - 60 && x.p.y > 60 && x.p.y < innerHeight - 60)!;
-    });
-    await page.mouse.move(dot.p.x, dot.p.y);
-    const tip = page.locator(".tip");
-    await expect(tip).toBeVisible();
-    const names = await page.evaluate(async (k) => {
-      const m = await (await fetch("/data/manifest.json")).json();
-      return ((await (await fetch(`/data/${m.files.stations}`)).json())[k] as [string])[0];
-    }, dot.k);
-    await expect(tip.locator("b")).toHaveText(names.replace(/\s+/g, " ").replace(/\s*\/\s*/g, " / ").trim());
-    await page.mouse.click(dot.p.x, dot.p.y);
-    await expect(page).toHaveURL(new RegExp(`#/station/${dot.k}$`));
+    await checkStopDot(page, await stopDotAtSavoy(page));
+  });
+
+  test("the home view: the stop dots, a name for each stop dot from zoom 16, and a click opens the stop", async ({ page }) => {
+    await page.setViewportSize(WIDE);
+    await open(page, "#/");
+    await mapReady(page, true);
+    const dot = await stopDotAtSavoy(page);
+    await page.waitForFunction(() => window.__settled!());
+    const counts = await page.evaluate(() => ({
+      dots: new Set(window.__map!.queryRenderedFeatures({ layers: ["stop-dots"] }).map((f) => f.properties.k)).size,
+      labels: document.querySelectorAll(".st-label").length,
+    }));
+    expect(counts.dots).toBeGreaterThan(0);
+    expect(counts.labels).toBe(counts.dots);
+    await checkStopDot(page, dot);
   });
 
   test("a stop pin: the tooltip with the stop name and its text form", async ({ page }) => {

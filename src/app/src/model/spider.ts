@@ -105,13 +105,13 @@ export function applyFilter(rows: SpiderRow[], f: Filter): { filter: Filter; row
   return shown.length || f === "all" ? { filter: f, rows: shown } : { filter: "all", rows };
 }
 
-// app_design 5.5: the stations that the shown patterns serve after the selected stops.
-export function servedStations(d: Core, pats: SpiderPattern[], lines: ReadonlySet<string>): Set<StationKey> {
-  const out = new Set<StationKey>();
+// app_design 5.5: the stops that the shown patterns serve after the selected stops.
+export function servedStops(d: Core, pats: SpiderPattern[], lines: ReadonlySet<string>): Set<StopKey> {
+  const out = new Set<StopKey>();
   for (const p of pats) {
     const [lineId, , , , stops] = d.patterns[p.pid]!;
     if (!lines.has(lineId)) continue;
-    for (let i = p.i + 1; i < stops.length; i++) out.add(stationOf(d, stops[i]!));
+    for (let i = p.i + 1; i < stops.length; i++) out.add(stops[i]!);
   }
   return out;
 }

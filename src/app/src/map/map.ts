@@ -13,7 +13,7 @@ import { route } from "../state/route";
 import { spider } from "../state/spider";
 import { AttributionControl } from "./attributionControl";
 import { readColors, type Colors } from "./colors";
-import { EndLabels, StationNames, type PinBox } from "./endLabels";
+import { EndLabels, StopNames, type PinBox } from "./endLabels";
 import { homeSource } from "./home";
 import { MapHover } from "./hover";
 import { applyLayers, layerSpecs, SOURCES, type LayerState, type SourceId } from "./layers";
@@ -22,7 +22,7 @@ import { overlayLayer } from "./overlay";
 import { Pins } from "./pins";
 import { routeMap, type RouteMap } from "./route";
 import { spiderMap, type AfterSection, type SpiderMap } from "./spider";
-import { stationsSource } from "./stations";
+import { stopsSource } from "./stops";
 import { keepClientLayers, styleUrl, transformRequest } from "./style";
 
 const START: { center: LngLatLike; zoom: number } = { center: [-0.1248, 51.5081], zoom: 12 }; // Charing Cross (app_design 5.2)
@@ -32,7 +32,7 @@ const START: { center: LngLatLike; zoom: number } = { center: [-0.1248, 51.5081]
 const CENTRE_BOX = { west: -0.6, south: 51.22, east: 0.33, north: 51.7 };
 const FOLD_MS = 250; // the map move of a fold on a phone (app_design 4.2)
 const foldEase = (t: number) => 1 - (1 - t) ** 5; // starts fast and stops slowly: near --fold-ease, the curve of the panel (app_design 4.2)
-const SETTLE_MS = 150; // after a zoom, the end labels and the station names wait this time with no move (prod_design 5.8)
+const SETTLE_MS = 150; // after a zoom, the end labels and the stop names wait this time with no move (prod_design 5.8)
 const WHEEL_END_MS = 120; // after a fit, the wheel is muted until no wheel event comes for this time (prod_design 5.8)
 // prod_design 5.8: the zoom speed of the demo (160 px of wheel for one zoom level; a trackpad pinch: 90 px).
 // MapLibre gives log2(2 / (1 + exp(-|px| x rate))) zoom levels for the px of one frame.
@@ -207,15 +207,15 @@ export function startMap(container: HTMLElement): void {
     for (const f of fs) f();
   });
 
-  // The data that does not change: the stations, then the home lines (prod_design 5.3).
-  let stationsSet = false;
+  // The data that does not change: the stops, then the home lines (prod_design 5.3).
+  let stopsSet = false;
   let homeSet = false;
   const syncData = () => {
     const d = core.peek();
     const l = lines.peek();
-    if (d && !stationsSet) {
-      measureSetData("stationsSet", () => source("stations").setData(stationsSource(d)));
-      stationsSet = true;
+    if (d && !stopsSet) {
+      measureSetData("stopsSet", () => source("stops").setData(stopsSource(d)));
+      stopsSet = true;
     }
     if (d && l && !homeSet) {
       homeSet = true;
@@ -263,7 +263,7 @@ export function startMap(container: HTMLElement): void {
     setHomeVisibility();
   });
 
-  // The spider graph (app_design 6.4): the view source, the station dots, the pins, and one fit for
+  // The spider graph (app_design 6.4): the view source, the stop dots, the pins, and one fit for
   // each spider graph, when its lines are loaded.
   let shown: SpiderMap | null = null;
   let sections: ReadonlyMap<PatternKey, AfterSection> | null = null;
@@ -274,10 +274,10 @@ export function startMap(container: HTMLElement): void {
   });
   const pins = new Pins(map, { enter: (k, el) => hover.pinEnter(k, el), leave: () => hover.pinLeave() });
   const endLabels = new EndLabels(map);
-  const names = new StationNames(map);
+  const names = new StopNames(map);
 
   // prod_design 5.8: the settle. After a move with a zoom, wait until no move starts for SETTLE_MS; after
-  // a move with no zoom, at once. Then place the end labels and the station names. During a zoom, the
+  // a move with no zoom, at once. Then place the end labels and the stop names. During a zoom, the
   // markers move with the map and do not change.
   const placeMarks = () => {
     const d = core.peek();
@@ -288,7 +288,7 @@ export function startMap(container: HTMLElement): void {
     endLabels.place(boxes);
     const placeNames = () => names.place(d, s ? s.served : null, station);
     placeNames();
-    // The station names come from the rendered station dots: after a zoom, the tiles can still load.
+    // The stop names come from the rendered stop dots: after a zoom, the tiles can still load.
     if (!map.loaded()) map.once("idle", placeNames);
   };
   let placedZoom = NaN;
