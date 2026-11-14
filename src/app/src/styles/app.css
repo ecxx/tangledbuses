@@ -263,7 +263,7 @@ a.tab:hover { color: var(--ink); }
 .chip.stop { padding: 0 10px 0 3px; }
 .chip.stop .roundel { width: 24px; height: 24px; font-size: 10.5px; } /* app_design 3.4: stop chip */
 
-/* ---------- Map marks (prod_design 5.6). z-index from the bottom: station names, end labels, pins, the selected pin. ---------- */
+/* ---------- Map marks (prod_design 5.6). z-index from the bottom: stop names, end labels, pins, the selected pin. ---------- */
 /* An end label (app_design 6.4): a dot at the end of the line, the label above it, or a bubble. The
    marker element has no size: its point is the end. */
 .term { width: 0; height: 0; z-index: 1; }
@@ -317,11 +317,12 @@ a.tab:hover { color: var(--ink); }
 
 /* A station name (app_design 5.4), at the right of its dot. */
 .st-label { width: 0; height: 0; z-index: 0; pointer-events: none; }
-.st-label span {
+.st-label > span {
   position: absolute; left: 11px; top: 0; translate: 0 -50%;
   white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--ink);
   text-shadow: 0 0 3px var(--panel), 0 0 3px var(--panel), 0 0 2px var(--panel);
 }
+.st-label .muted { font-weight: 500; }
 
 .pin { z-index: 3; cursor: pointer; }
 .pin .roundel {

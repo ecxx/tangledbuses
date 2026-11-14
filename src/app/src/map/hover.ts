@@ -1,14 +1,14 @@
 // prod_design 5.5: hover and click on the map. The routes at the pointer (at most one time each frame),
 // the tooltips, the highlight and the route menu (app_design 6.4). The tooltips and the clicks of the
-// station dots (app_design 5.5), of the stop dots of the route view (app_design 6.5) and of the stop pins.
+// stop dots (app_design 5.5), of the stop dots of the route view (app_design 6.5) and of the stop pins.
 import type { Map, MapGeoJSONFeature, MapMouseEvent, PointLike } from "maplibre-gl";
 import type { Core } from "../data/load";
 import type { PatternKey, StopKey } from "../data/types";
 import { mercX, mercY } from "../model/geo";
 import { distanceToLine, hoverItems, type Highlight, type HoverItem } from "../model/hover";
 import type { RouteContext } from "../model/route";
-import { stopsText } from "../model/stopCode";
-import { stationName, stopCode, stopName } from "../model/text";
+import { stopCode, stopName } from "../model/text";
+import { dotReach } from "./layers";
 import { viewHash } from "../model/url";
 import { time } from "../perf";
 import { go } from "../state/router";
@@ -19,7 +19,7 @@ import type { AfterSection } from "./spider";
 const HIT_PX = 5; // a route 5 px or less from the pointer is at the pointer (app_design 6.4)
 const TILE = 512; // MapLibre: one world unit is TILE * 2^zoom px
 const LINE_DY = 8; // px between the pointer and a route tooltip
-const DOT_DY = 10; // px between a station dot and its tooltip
+const DOT_DY = 10; // px between a stop dot and its tooltip
 const PIN_DY = 4; // px between a stop pin and its tooltip
 
 const onMarker = (e: MapMouseEvent): boolean => !!(e.originalEvent.target as Element | null)?.closest?.(".maplibregl-marker");
@@ -28,6 +28,7 @@ export interface HoverSource {
   core: () => Core | null;
   sections: () => ReadonlyMap<PatternKey, AfterSection> | null; // the sections after the stop of the view
   ctx: () => RouteContext | null; // the stop or the station that a route opens from
+  served: () => ReadonlySet<StopKey> | null; // the stops with a red ring. null: no spider graph.
 }
 
 export class MapHover {
@@ -80,17 +81,43 @@ export class MapHover {
     return hoverItems(d, near);
   }
 
-  // The dot at a point: a stop dot of the route view, else a station dot (the stop dots are above).
-  private dotAt(p: { x: number; y: number }): { kind: "stop" | "station"; k: string; f: MapGeoJSONFeature } | undefined {
-    for (const [layer, kind] of [
-      ["route-stops", "stop"],
-      ["station-dots", "station"],
-    ] as const) {
-      if (!this.map.getLayer(layer)) continue;
-      const f = this.map.queryRenderedFeatures([p.x, p.y], { layers: [layer] })[0];
-      if (f) return { kind, k: f.properties.k as string, f };
+  // The dot at a point: a stop dot of the route view (above), else a stop dot. k: the stop of the
+  // tooltip. A click opens the stop (app_design 5.5, 6.5).
+  private dotAt(p: { x: number; y: number }): { k: StopKey; f: MapGeoJSONFeature } | undefined {
+    if (this.map.getLayer("route-stops")) {
+      const f = this.map.queryRenderedFeatures([p.x, p.y], { layers: ["route-stops"] })[0];
+      if (f) return { k: f.properties.k as StopKey, f };
     }
-    return undefined;
+    return this.stopDotAt(p);
+  }
+
+  // The stop dot at a point: the nearest dot whose circle (with its stroke) contains the point. A point
+  // query is not sufficient: MapLibre pads the query by the largest circle-radius of the tile only if the
+  // radius changes with the data. With no spider graph, the radius changes only with the zoom, the
+  // padding is 0, and a point on a dot can find no feature.
+  private stopDotAt(p: { x: number; y: number }): { k: StopKey; f: MapGeoJSONFeature } | undefined {
+    if (!this.map.getLayer("stop-dots")) return undefined;
+    const zoom = this.map.getZoom();
+    const served = this.src.served();
+    const reach = (k: StopKey) => dotReach(zoom, served ? (served.has(k) ? "red" : "dim") : "plain");
+    const r = Math.max(dotReach(zoom, "plain"), dotReach(zoom, "red"));
+    if (!r) return undefined;
+    const box: [PointLike, PointLike] = [
+      [p.x - r, p.y - r],
+      [p.x + r, p.y + r],
+    ];
+    let best: { k: StopKey; f: MapGeoJSONFeature } | undefined;
+    let bestD = Infinity;
+    for (const f of this.map.queryRenderedFeatures(box, { layers: ["stop-dots"] })) {
+      const k = f.properties.k as StopKey;
+      const at = this.map.project((f.geometry as GeoJSON.Point).coordinates as [number, number]);
+      const d = Math.hypot(at.x - p.x, at.y - p.y);
+      if (d <= reach(k) && d < bestD) {
+        best = { k, f };
+        bestD = d;
+      }
+    }
+    return best;
   }
 
   private href(i: HoverItem): string {
@@ -124,13 +151,13 @@ export class MapHover {
     // The dots are above the lines (prod_design 5.4).
     const dot = this.dotAt(this.pt);
     if (dot) {
-      const { kind, k } = dot;
-      if (this.key !== `${kind}|${k}`) {
+      const { k } = dot;
+      if (this.key !== `stop|${k}`) {
         this.clearRoutes();
-        this.key = `${kind}|${k}`;
+        this.key = `stop|${k}`;
         const [lon, lat] = (dot.f.geometry as GeoJSON.Point).coordinates as [number, number];
         const at = this.map.project([lon, lat]);
-        this.tip.show(kind === "stop" ? stopTip(d, k) : stationTip(d, k), box.left + at.x, box.top + at.y, DOT_DY);
+        this.tip.show(stopTip(d, k), box.left + at.x, box.top + at.y, DOT_DY);
       }
       this.map.getCanvas().style.cursor = "pointer";
       return;
@@ -168,7 +195,7 @@ export class MapHover {
     const dot = this.dotAt(e.point);
     if (dot) {
       this.menu.close();
-      return go(viewHash({ kind: dot.kind, key: dot.k }));
+      return go(viewHash({ kind: "stop", key: dot.k }));
     }
     const items = this.routesAt(e.point);
     if (items.length === 1) {
@@ -197,13 +224,6 @@ export class MapHover {
     this.onPin = false;
     this.tip.hide();
   }
-}
-
-// The tooltip of a station dot: the name and its stops (app_design 3.5, 5.5).
-function stationTip(d: Core, k: string): (Node | string)[] {
-  const ks = d.stationStops.get(k) ?? [];
-  const sub = stopsText(ks.map((s) => ({ indicator: d.stops[s]![1], heading: d.stops[s]![5], name: stopName(d, s) })));
-  return nameTip(stationName(d, k), sub, true);
 }
 
 // The tooltip of a stop pin or a stop dot: the stop name and its text form (app_design 3.5).

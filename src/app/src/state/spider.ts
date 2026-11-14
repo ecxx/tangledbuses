@@ -6,7 +6,7 @@ import type { RouteContext } from "../model/route";
 import {
   applyFilter,
   filterCounts,
-  servedStations,
+  servedStops,
   spiderPatterns,
   spiderRows,
   type Filter,
@@ -27,7 +27,7 @@ export interface Spider {
   filter: Filter; // the filter that applies: All if the selected filter has no rows
   shown: SpiderRow[]; // the rows of the filter
   patterns: SpiderPattern[]; // the patterns of the shown rows
-  served: Set<StationKey>; // the stations that the shown patterns serve after the selected stops
+  served: Set<StopKey>; // the stops that the shown patterns serve after the selected stops
 }
 
 const graph = computed(() => {
@@ -50,6 +50,6 @@ export const spider = computed((): Spider | null => {
   const { filter: f, rows: shown } = applyFilter(g.rows, filter.value);
   const pids = new Set(shown.flatMap((r) => r.pids));
   const patterns = all.filter((p) => pids.has(p.pid));
-  const served = servedStations(d, patterns, new Set(shown.map((r) => r.line.id)));
+  const served = servedStops(d, patterns, new Set(shown.map((r) => r.line.id)));
   return { ...rest, filter: f, shown, patterns, served };
 });

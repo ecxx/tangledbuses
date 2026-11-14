@@ -121,7 +121,7 @@ const ROWS: [string, string][] = [
   ["homeBuild", "build home source"],
   ["homeChunk", "home group (one task)"],
   ["homeSetData", "home groups (sum)"],
-  ["stationsSet", "stations setData"],
+  ["stopsSet", "stops setData"],
   ["longTask", "long tasks (>= 50 ms)"],
   ["spider", "open spider (script)"],
   ["spiderPaint", "open spider (to paint)"],

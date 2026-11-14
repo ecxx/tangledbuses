@@ -1,15 +1,15 @@
 // prod_design 5.6: the end labels and the bubbles of a spider graph (app_design 6.4, 5.4), and the
-// station names (app_design 5.4). DOM markers. The groups are made when a spider graph opens; the
+// stop names (app_design 5.4). DOM markers. The groups are made when a spider graph opens; the
 // placement is at each settle (prod_design 5.8).
 import type { Map, Marker } from "maplibre-gl";
 import type { Core } from "../data/load";
-import type { Direction, LineInfo, StationKey } from "../data/types";
+import type { Direction, LineInfo, StationKey, StopKey } from "../data/types";
 import { hasEndLabel, isCircular } from "../model/circular";
 import { endBadgeSize, endBadgesShown, endGroups, type End, type EndGroup } from "../model/endLabels";
 import type { LngLat } from "../model/geo";
 import { highlights, type Highlight } from "../model/hover";
 import type { RouteContext } from "../model/route";
-import { stationName } from "../model/text";
+import { stopCode, stopName } from "../model/text";
 import { viewHash } from "../model/url";
 import { go } from "../state/router";
 import { highlight } from "../state/signals";
@@ -20,7 +20,7 @@ import type { AfterSection } from "./spider";
 const TERM_GAP = 2; // px kept between placed labels (app_design 6.4)
 const TERM_KEEP = 40; // px kept free of labels around each selected stop
 const LABEL_DY = 8; // px between the end and the bottom of its label (the .term-in CSS)
-const NAME_ZOOM = 16; // the station names start at this zoom (app_design 5.4)
+const NAME_ZOOM = 16; // the stop names start at this zoom (app_design 5.4)
 
 type Band = 0 | 1 | 2; // the zoom bands of app_design 5.4: below 12, 12 to 14, from 14
 const bandOf = (z: number): Band => (z < 12 ? 0 : z < 14 ? 1 : 2);
@@ -159,19 +159,20 @@ export class EndLabels {
   }
 }
 
-// app_design 5.4: the station names, from zoom 16, for the stations in view that are not dimmed.
-export class StationNames {
-  private markers = new globalThis.Map<StationKey, Marker>();
+// app_design 5.4: from zoom 16, the stop names: the name and the stop text of each stop dot in view that
+// is not dimmed.
+export class StopNames {
+  private markers = new globalThis.Map<StopKey, Marker>();
 
   constructor(private map: Map) {}
 
-  // bright: the stations that are not dimmed (null: all). hidden: the selected station (it has pins).
-  place(d: Core, bright: ReadonlySet<StationKey> | null, hidden: StationKey | null): void {
-    const want = new Set<StationKey>();
-    if (this.map.getZoom() >= NAME_ZOOM && this.map.getLayer("station-dots")) {
-      for (const f of this.map.queryRenderedFeatures({ layers: ["station-dots"] })) {
-        const k = f.properties.k as StationKey;
-        if (k !== hidden && (!bright || bright.has(k))) want.add(k);
+  // bright: the stops that are not dimmed (null: all). hidden: the selected station (its stops are pins).
+  place(d: Core, bright: ReadonlySet<StopKey> | null, hidden: StationKey | null): void {
+    const want = new Set<StopKey>();
+    if (this.map.getZoom() >= NAME_ZOOM && this.map.getLayer("stop-dots")) {
+      for (const f of this.map.queryRenderedFeatures({ layers: ["stop-dots"] })) {
+        const k = f.properties.k as StopKey;
+        if (f.properties.s !== hidden && (!bright || bright.has(k))) want.add(k);
       }
     }
     for (const [k, m] of this.markers) {
@@ -181,10 +182,11 @@ export class StationNames {
     }
     for (const k of want) {
       if (this.markers.has(k)) continue;
-      const [, lat, lon] = d.stations[k]!;
-      const e = el("div", "st-label", el("span", "", stationName(d, k)));
-      e.setAttribute("aria-hidden", "true"); // the station list and the search of the panel have the same stations
-      this.markers.set(k, new maplibregl.Marker({ element: e }).setLngLat([lon, lat]).addTo(this.map));
+      const name = stopName(d, k);
+      const text = stopCode(d, k).text;
+      const e = el("div", "st-label", el("span", "", name, ...(text && text !== name ? [" ", el("span", "muted", text)] : [])));
+      e.setAttribute("aria-hidden", "true"); // the lists of the panel have the same stops
+      this.markers.set(k, new maplibregl.Marker({ element: e }).setLngLat([d.stops[k]![3], d.stops[k]![2]]).addTo(this.map));
     }
   }
 }

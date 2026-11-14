@@ -58,7 +58,7 @@ test.describe("route view (app_design 6.5)", () => {
     expect(dots.filter((x) => x.end).length).toBe(2);
     await expect(page.locator(".pin")).toHaveCount(0);
     expect(await page.evaluate(() => window.__map!.getLayoutProperty("home-lines", "visibility"))).toBe("none");
-    expect(await page.evaluate(() => window.__map!.getFilter("station-dots"))).toBeFalsy();
+    expect(await page.evaluate(() => window.__map!.getFilter("stop-dots"))).toBeFalsy();
     // The fit: the selected pattern in the free area, from zoom 10.
     const z = await page.evaluate(() => window.__map!.getZoom());
     expect(z).toBeGreaterThanOrEqual(10);
@@ -103,7 +103,7 @@ test.describe("route view (app_design 6.5)", () => {
     const dots = await features(page, "route-stops");
     expect(dots).toHaveLength(36);
     expect(dots.some((x) => x.k === "490001038D")).toBe(false);
-    expect(await page.evaluate(() => window.__map!.getFilter("station-dots"))).toEqual(["!=", ["get", "k"], BRONDESBURY]);
+    expect(await page.evaluate(() => window.__map!.getFilter("stop-dots"))).toEqual(["!=", ["get", "s"], BRONDESBURY]);
     // The fit: the pin of the focus is in the free area.
     const panel = (await page.locator(".panel").boundingBox())!;
     const pin = (await page.locator('.pin[data-stop="490001038D"]').boundingBox())!;

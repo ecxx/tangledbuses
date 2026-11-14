@@ -1,0 +1,13 @@
+// prod_design 7: the site is static files on Cloudflare Workers (static assets), at tangledbuses.com.
+// public/_headers gives the Cache-Control headers.
+{
+  "name": "tangledbuses",
+  "compatibility_date": "2026-11-10",
+  "assets": {
+    "directory": "./dist"
+  },
+  // The live CARTO key is restricted to the domain of the site (D17). Thus no workers.dev URL and no preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "tangledbuses.com", "custom_domain": true }]
+}

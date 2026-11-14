@@ -115,7 +115,7 @@ test.describe("basemap and colour scheme (prod_design 5.2)", () => {
     const ids = await page.evaluate(() => window.__map!.getStyle().layers.map((l) => l.id));
     const at = ids.indexOf("home-lines");
     expect(ids.slice(at)).toEqual([
-      "home-lines", "route-other", "spider-behind", "spider-after", "route-selected", "station-dots", "route-stops", "highlight", "hover-ring",
+      "home-lines", "route-other", "spider-behind", "spider-after", "route-selected", "stop-dots", "route-stops", "highlight", "hover-ring",
     ]);
   });
 

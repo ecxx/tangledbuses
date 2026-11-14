@@ -115,7 +115,7 @@ test.describe("end labels (app_design 6.4)", () => {
   });
 
   test("the pointer on a line opens the labels of its routes, and they take no pointer events", async ({ page }) => {
-    await zoomTo(page, 12); // below STOP_ZOOM: no station dot is on the end of a line
+    await zoomTo(page, 12); // below STOP_ZOOM: no stop dot is on the end of a line
     // The end of a section: the dot of a label. The pointer there is on the line.
     const at = await page.evaluate(() => {
       const panel = document.querySelector(".panel")!.getBoundingClientRect();
@@ -150,19 +150,19 @@ test.describe("end labels (app_design 6.4)", () => {
   });
 });
 
-test.describe("station names (app_design 5.4)", () => {
-  test("from zoom 16, for the served stations in view; not for the selected station", async ({ page }) => {
+test.describe("stop names (app_design 5.4)", () => {
+  test("from zoom 16, for the served stops in view; not for the selected station", async ({ page }) => {
     test.slow(); // three zooms, each with the basemap tiles (the names come from the rendered dots)
     await page.setViewportSize(WIDE);
     await open(page, `#/station/${ALDWYCH}`);
     await mapReady(page, true);
     await fitDone(page);
-    // A served station (a red ring) at zoom 15, then the zooms 15.9 and 16 at it.
+    // A served stop (a red ring) at zoom 15, then the zooms 15.9 and 16 at it.
     await zoomTo(page, 15);
     const at = await page.evaluate(() => {
       const m = window.__map!;
-      const ring = JSON.stringify(m.getPaintProperty("station-dots", "circle-stroke-color"));
-      const f = m.queryRenderedFeatures({ layers: ["station-dots"] }).find((f) => ring.includes(`"${f.properties.k}"`))!;
+      const ring = JSON.stringify(m.getPaintProperty("stop-dots", "circle-stroke-color"));
+      const f = m.queryRenderedFeatures({ layers: ["stop-dots"] }).find((f) => ring.includes(`"${f.properties.k}"`))!;
       return (f.geometry as GeoJSON.Point).coordinates as [number, number];
     });
     for (const z of [15.9, 16]) {
@@ -173,14 +173,11 @@ test.describe("station names (app_design 5.4)", () => {
     }
     const names = await page.locator(".st-label").allTextContents();
     expect(names.length).toBeGreaterThan(0);
-    expect(names).not.toContain("Aldwych / Drury Lane");
-    // Each name is of a station with a red ring.
-    const ring = JSON.stringify(await page.evaluate(() => window.__map!.getPaintProperty("station-dots", "circle-stroke-color")));
-    const keys = await page.evaluate(() => {
-      const m = window.__map!;
-      return m.queryRenderedFeatures({ layers: ["station-dots"] }).map((f) => f.properties.k as string);
-    });
-    const served = keys.filter((k) => ring.includes(`"${k}"`));
+    // One name for each rendered served stop dot. The stops of the selected station have no dot.
+    const ring = JSON.stringify(await page.evaluate(() => window.__map!.getPaintProperty("stop-dots", "circle-stroke-color")));
+    const dots = await page.evaluate(() => window.__map!.queryRenderedFeatures({ layers: ["stop-dots"] }).map((f) => ({ k: f.properties.k as string, s: f.properties.s as string })));
+    expect(dots.some((d) => d.s === ALDWYCH)).toBe(false);
+    const served = dots.filter((d) => ring.includes(`"${d.k}"`)).map((d) => d.k);
     expect(names.length).toBe(new Set(served).size);
   });
 });

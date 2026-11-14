@@ -75,7 +75,7 @@ test.describe("step 15 measurements (prod_design 9)", () => {
         info,
         `lines x${rate}`,
         `in the worker: fetch and parse ${f1(s("linesFetch"))}, decode ${f1(s("decode"))} ms; on the main thread: ` +
-          `lines ${f1(s("linesMain"))}, build home ${f1(s("homeBuild"))}, home groups ${f1(s("homeSetData"))} (longest ${f1(Math.max(...runs.map((r) => r.series.homeChunk!.max)))}), stations setData ${f1(s("stationsSet"))} ms`,
+          `lines ${f1(s("linesMain"))}, build home ${f1(s("homeBuild"))}, home groups ${f1(s("homeSetData"))} (longest ${f1(Math.max(...runs.map((r) => r.series.homeChunk!.max)))}), stops setData ${f1(s("stopsSet"))} ms`,
       );
       // The long tasks after the home lists are on the screen (the lines and the map).
       log(info, `long tasks x${rate}`, runs.map((r) => fmt(r.series.longTask)).join("; "));
