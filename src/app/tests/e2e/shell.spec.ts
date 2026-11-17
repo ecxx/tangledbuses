@@ -89,6 +89,12 @@ test.describe("keys and history (app_design 4.3)", () => {
     await expect.poll(() => hash(page)).toBe("#/");
   });
 
+  test("the close button of a stop goes to home", async ({ page }) => {
+    await open(page, "#/stop/490001038D");
+    await page.locator(".scroll").getByRole("button", { name: "Close" }).click();
+    await expect.poll(() => hash(page)).toBe("#/");
+  });
+
   test("/ puts the cursor in the search field, and Esc clears the field", async ({ page }) => {
     await open(page, "#/station/ICS1001038");
     await page.keyboard.press("/");
@@ -145,11 +151,11 @@ test.describe("fold on a wide screen (app_design 4.2)", () => {
   });
 
   test("the buttons of the copy of the header operate as in the panel", async ({ page }) => {
-    await open(page, "#/stop/490001038D");
+    await open(page, "#/stop/490001038D/line/189");
     await page.getByRole("button", { name: "Hide the list" }).click();
     await afterFold(page);
     await page.locator(".peek").getByRole("button", { name: "Close" }).click();
-    await expect.poll(() => hash(page)).toBe("#/station/ICS1001038");
+    await expect.poll(() => hash(page)).toBe("#/stop/490001038D");
     await expect(page.getByRole("button", { name: "Show the list" })).toBeVisible();
   });
 

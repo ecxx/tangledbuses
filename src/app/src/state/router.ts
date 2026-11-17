@@ -1,6 +1,6 @@
 // app_design 4.3: the hash router.
 import { effect } from "@preact/signals";
-import { parseHash, resolveView, upView, viewHash, type View } from "../model/url";
+import { closeView, parseHash, resolveView, upView, viewHash, type View } from "../model/url";
 import { afterPaint, now, sample, spanStart } from "../perf";
 import { core, highlight, rowHover, view } from "./signals";
 
@@ -18,11 +18,17 @@ export function go(hash: string, replace = false): void {
 
 export const goView = (v: View, replace = false): void => go(viewHash(v), replace);
 
-// One level up (the close button and the Esc key). From the hash, not from the view signal: the
+// One level up (the Esc key). From the hash, not from the view signal: the
 // hashchange event comes after the hash changes, so two fast Esc keys would otherwise see the same view.
 export function goUp(): void {
   const d = core.value;
   if (d) goView(upView(d, resolveView(d, parseHash(location.hash))));
+}
+
+// The close button: as goUp, but a stop goes to home (app_design 4.3). Also from the hash.
+export function goClose(): void {
+  const d = core.value;
+  if (d) goView(closeView(d, resolveView(d, parseHash(location.hash))));
 }
 
 // The view of the current hash (for the keys, which can come before the hashchange event).
