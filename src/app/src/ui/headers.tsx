@@ -4,11 +4,11 @@ import { routeHeader } from "../model/route";
 import { stationName, stationOf, stopCode, stopName, stopRoundel } from "../model/text";
 import { viewHash, type View } from "../model/url";
 import { route } from "../state/route";
-import { goUp } from "../state/router";
+import { goClose } from "../state/router";
 import { Badge, CloseIcon, Roundel, StationRing } from "./marks";
 
 const Close = () => (
-  <button class="close" type="button" aria-label="Close" title="Close" onClick={goUp}>
+  <button class="close" type="button" aria-label="Close" title="Close" onClick={goClose}>
     <CloseIcon />
   </button>
 );

@@ -99,3 +99,7 @@ export function upView(d: Core, v: View): View {
       return HOME;
   }
 }
+
+// The view after the close button (app_design 4.3): a stop goes to home, not to its station.
+// The other views go up one level, as upView.
+export const closeView = (d: Core, v: View): View => (v.kind === "stop" ? HOME : upView(d, v));

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "vitest";
 import type { Core } from "../../src/data/load";
 import { datasetDate } from "../../src/model/text";
-import { parseHash, resolveView, upView, viewHash, type View } from "../../src/model/url";
+import { closeView, parseHash, resolveView, upView, viewHash, type View } from "../../src/model/url";
 import { HAS_EXPORT, getCore } from "./fixtures";
 
 describe("the URLs of app_design 4.3", () => {
@@ -72,5 +72,14 @@ describe.skipIf(!HAS_EXPORT)("D12 and one level up, in data_131026", () => {
     expect(up("#/stop/490001038D")).toBe("#/station/ICS1001038");
     expect(up("#/station/ICS1001038")).toBe("#/");
     expect(up("#/about")).toBe("#/");
+  });
+
+  test("the close button: a stop -> home, the other views as one level up", () => {
+    const close = (h: string) => viewHash(closeView(d, parseHash(h)));
+    expect(close("#/stop/490001038D")).toBe("#/");
+    expect(close("#/stop/490001038D/line/189")).toBe("#/stop/490001038D");
+    expect(close("#/station/ICS1001038/line/189")).toBe("#/station/ICS1001038");
+    expect(close("#/station/ICS1001038")).toBe("#/");
+    expect(close("#/about")).toBe("#/");
   });
 });
