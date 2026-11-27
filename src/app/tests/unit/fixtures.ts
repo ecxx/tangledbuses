@@ -22,3 +22,9 @@ let lines: Promise<Map<PatternKey, DecodedLine>> | undefined;
 export const getCore = (): Promise<Core> => (core ??= loadCore("/data/", diskFetch(EXPORT_DIR)));
 export const getLines = async (): Promise<Map<PatternKey, DecodedLine>> =>
   (lines ??= getCore().then((c) => loadLines(c, "/data/", diskFetch(EXPORT_DIR))));
+
+// A real response of TfL, GET /StopPoint/490019703Z/Arrivals (Aldwych / Drury Lane, Stop S): 18 predictions,
+// 27 Nov 2026, 16:18 GMT. It is in the repository (tests/unit/fixtures/), so the tests that use only it do not skip.
+export const TFL_STOP = "490019703Z";
+export const tflArrivalsFixture = (): unknown[] =>
+  readJson(fileURLToPath(new URL("./fixtures/tfl_arrivals_490019703Z.json", import.meta.url))) as unknown[];

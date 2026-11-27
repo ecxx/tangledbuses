@@ -8,9 +8,12 @@ import "./styles/tokens.css";
 import "./styles/app.css";
 import { effect } from "@preact/signals";
 import { render } from "preact";
-import { FormatError, loadCore, loadLinesInWorker } from "./data/load";
+import { setArrivalsSource } from "./data/arrivals";
+import { FormatError, loadCore, loadLinesInWorker, type Core } from "./data/load";
+import { tflSource } from "./data/tflArrivals";
 import { startMap } from "./map/map";
 import { mark, showPerf } from "./perf";
+import { startArrivals } from "./state/arrivals";
 import { startRouter } from "./state/router";
 import { chosenScheme, core, lines, loadError, scheme } from "./state/signals";
 import { App } from "./ui/App";
@@ -30,12 +33,32 @@ startRouter();
 startMap(document.getElementById("map")!);
 showPerf();
 
+// The live times (prod_design 6.2, 7).
+//   Build: the TfL source. ?arrivals=off turns the feature off.
+//   Development server: the fake source (no network request). ?arrivals=live uses the TfL source,
+//   ?arrivals=off or ?fakeArrivals=off turns the feature off, ?fakeArrivals=<mode> selects a state of the fake source.
+// The fake source is behind import.meta.env.DEV: Vite removes it from the build.
+async function startLiveTimes(c: Core): Promise<void> {
+  const q = new URLSearchParams(location.search);
+  const flag = q.get("arrivals");
+  if (flag === "off") return;
+  if (import.meta.env.DEV && flag !== "live") {
+    if (q.get("fakeArrivals") === "off") return;
+    const f = await import("./data/fakeArrivals");
+    setArrivalsSource(f.fakeSource(c, f.fakeMode(location.search)), "fake");
+  } else {
+    setArrivalsSource(tflSource(c), "tfl");
+  }
+  startArrivals();
+}
+
 // prod_design 4.1: the panel operates after stops, stations and patterns. The lines come after.
 (async () => {
   try {
     const c = await loadCore();
     mark("core");
     core.value = c;
+    void startLiveTimes(c); // after the core: the panel does not wait for it
     lines.value = await loadLinesInWorker(c);
   } catch (err) {
     console.error(err);

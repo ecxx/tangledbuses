@@ -23,6 +23,7 @@ design/
 docs/
 CLAUDE.md
 .claude/
+feature/*
 
 # Front-end (for src/app/)
 node_modules/
